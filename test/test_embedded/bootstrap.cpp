@@ -4,12 +4,11 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include <FreeRTOS.h>
-#include <task.h>
 
 #include "configure_test/configure_test.hpp"
 
 #include "gpio_test/gpio_test.hpp"
+#include "motor_test/motor_test.hpp"
 
 extern "C"
 {
@@ -47,28 +46,40 @@ void vApplicationStackOverflowHook(
 
 void tearDown(void)
 {
-
 }
 
 void setUp(void)
 {
-
 }
 
-void task_test(void* pvparameters)
+void task_test(void *pvparameters)
 {
-    UNITY_BEGIN();
     RUN_TEST(test_gpio_set_high);
-    UNITY_END();
 }
 
 int main(void)
-{   
+{
     clock_setup();
     usart_setup();
 
-    xTaskCreate(task_test, "qualquer", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-    vTaskStartScheduler();
+    xCommandBus = xQueueCreate(MAX_COMMANDS_RECEIVE, MESSAGE_SIZE);
+    xNotificationOperatorBus = xQueueCreate(MAX_NOTIFICATION_SEND, MESSAGE_SIZE);
 
+    if (xCommandBus == NULL || xNotificationOperatorBus == NULL)
+    {   
+        printf("Failed\n");
+        return -1;
+    }
+
+    vSemaphoreCreateBinary(xSemaphoreBinaryVariable);
+    
+    UNITY_BEGIN();
+    xTaskCreate(task_test, "qualquer", configMINIMAL_STACK_SIZE * 2, NULL, 1, NULL);
+    xTaskCreate(xOperator1, "Xop1", configMINIMAL_STACK_SIZE * 2, NULL, 1, &xHandleOperator1);
+    xTaskCreate(xProcess1, "Xpr1", configMINIMAL_STACK_SIZE * 2, NULL, 1, &xHandleProcces1);
+    xTaskCreate(xCommandManagerTask, "Xcm", configMINIMAL_STACK_SIZE * 2, NULL, 1, &xHandleCommandMan);
+
+    vTaskStartScheduler();
+    UNITY_END();
     return 0;
 }

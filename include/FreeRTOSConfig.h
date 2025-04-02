@@ -131,4 +131,4 @@ NVIC value of 255. */
 #define xPortSysTickHandler sys_tick_handler
 
 
-#endif /* FREERTOS_CONFIG_H */cc
+#endif /* FREERTOS_CONFIG_H */
