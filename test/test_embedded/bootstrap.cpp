@@ -1,14 +1,20 @@
+
+#define UNITY_SUPPORT_TEST_CASE
+#define UNITY_SUPPORT_VARIADIC_MACROS
 #include <unity.h>
 
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 
+#include "FreeRTOS.h"
 
 #include "configure_test/configure_test.hpp"
 
 #include "gpio_test/gpio_test.hpp"
 #include "motor_test/motor_test.hpp"
+
+SemaphoreHandle_t xSemaphoreBinaryUnity = NULL;
 
 extern "C"
 {
@@ -52,9 +58,43 @@ void setUp(void)
 {
 }
 
-void task_test(void *pvparameters)
+static void test_if_tasks_and_semaphores_are_created(void)
 {
-    RUN_TEST(test_gpio_set_high);
+    xCommandBus = xQueueCreate(MAX_COMMANDS_RECEIVE, MESSAGE_SIZE);
+    xNotificationOperatorBus = xQueueCreate(MAX_NOTIFICATION_SEND, MESSAGE_SIZE);
+
+    if (xCommandBus == NULL || xNotificationOperatorBus == NULL)
+    {
+        TEST_FAIL_MESSAGE("Bus Not Created");
+    }
+
+    vSemaphoreCreateBinary(xSemaphoreBinaryVariable);
+
+    TEST_ASSERT_EQUAL_MESSAGE(pdPASS, xTaskCreate(xOperator1, "Xop1", configMINIMAL_STACK_SIZE * 2, NULL, configMAX_PRIORITIES - 3, &xHandleOperator1),
+                              "Task creation failed");
+    TEST_ASSERT_EQUAL_MESSAGE(pdPASS, xTaskCreate(xProcess1, "Xpr1", configMINIMAL_STACK_SIZE * 2, NULL, configMAX_PRIORITIES - 3, &xHandleProcces1),
+                              "Task creation failed");
+    TEST_ASSERT_EQUAL_MESSAGE(pdPASS, xTaskCreate(xCommandManagerTask, "Xcm", configMINIMAL_STACK_SIZE * 2, NULL, configMAX_PRIORITIES - 1, &xHandleCommandMan),
+                              "Task creation failed");
+    TEST_ASSERT_EQUAL_MESSAGE(pdPASS, xTaskCreate(xProccess2, "xop2", configMINIMAL_STACK_SIZE * 2, NULL, configMAX_PRIORITIES - 3, &xHandleProcces2),
+                              "Task Not created");
+}
+
+void vRunTestCase(void)
+{
+    xSemaphoreTake(xSemaphoreBinaryUnity, portMAX_DELAY);
+
+    UNITY_BEGIN();
+    RUN_TEST(test_if_tasks_and_semaphores_are_created);
+   
+
+    xSemaphoreGive(xSemaphoreBinaryUnity);
+}
+
+void prvTestRunnerTask(void *pvParameters)
+{
+    vRunTestCase();
+    vTaskSuspend(NULL);
 }
 
 int main(void)
@@ -62,24 +102,12 @@ int main(void)
     clock_setup();
     usart_setup();
 
-    xCommandBus = xQueueCreate(MAX_COMMANDS_RECEIVE, MESSAGE_SIZE);
-    xNotificationOperatorBus = xQueueCreate(MAX_NOTIFICATION_SEND, MESSAGE_SIZE);
+    vSemaphoreCreateBinary(xSemaphoreBinaryUnity);
 
-    if (xCommandBus == NULL || xNotificationOperatorBus == NULL)
-    {   
-        printf("Failed\n");
-        return -1;
-    }
-
-    vSemaphoreCreateBinary(xSemaphoreBinaryVariable);
-    
-    UNITY_BEGIN();
-    xTaskCreate(task_test, "qualquer", configMINIMAL_STACK_SIZE * 2, NULL, 1, NULL);
-    xTaskCreate(xOperator1, "Xop1", configMINIMAL_STACK_SIZE * 2, NULL, 1, &xHandleOperator1);
-    xTaskCreate(xProcess1, "Xpr1", configMINIMAL_STACK_SIZE * 2, NULL, 1, &xHandleProcces1);
-    xTaskCreate(xCommandManagerTask, "Xcm", configMINIMAL_STACK_SIZE * 2, NULL, 1, &xHandleCommandMan);
-
+    xTaskCreate(prvTestRunnerTask, "TestRunner1", configMINIMAL_STACK_SIZE * 3, NULL, configMAX_PRIORITIES, NULL);
     vTaskStartScheduler();
-    UNITY_END();
+    while (1)
+        ;
     return 0;
+
 }

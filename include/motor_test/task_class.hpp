@@ -7,7 +7,9 @@ typedef enum
 {
     FREE,
     BUSY,
-    PROCCESS_TERMINATED
+    PROCCESS_TERMINATED,
+    SUCCESS,
+    FAIL
 } task_status;
 
 typedef enum
